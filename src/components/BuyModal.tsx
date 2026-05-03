@@ -2,6 +2,9 @@ import { X, ShoppingCart, AlertCircle } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
+import type { Database } from "../lib/database.types";
+
+type PurchaseInsert = Database["public"]["Tables"]["purchases"]["Insert"];
 
 interface BuyModalProps {
   listingId: string;
@@ -23,6 +26,10 @@ export function BuyModal({
   const { user } = useAuth();
   const [step, setStep] = useState<"confirm" | "success">("confirm");
   const [loading, setLoading] = useState(false);
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCvc, setCardCvc] = useState("");
+  const [paymentError, setPaymentError] = useState("");
 
   const formatPrice = (price: number | null) => {
     if (price === null) return "Prix non spécifié";
@@ -32,17 +39,55 @@ export function BuyModal({
     }).format(price);
   };
 
+  const isValidCardNumber = (value: string) => {
+    const cleaned = value.replace(/\s+/g, "");
+    return /^\d{16}$/.test(cleaned);
+  };
+
+  const isValidExpiry = (value: string) => {
+    const match = /^\s*(0[1-9]|1[0-2])\/(\d{2})\s*$/.exec(value);
+    if (!match) return false;
+    const month = Number(match[1]);
+    const year = Number(`20${match[2]}`);
+    const now = new Date();
+    const expiryDate = new Date(year, month - 1, 1);
+    return expiryDate >= new Date(now.getFullYear(), now.getMonth(), 1);
+  };
+
+  const isValidCvc = (value: string) => /^\d{3,4}$/.test(value);
+
   const handlePurchase = async () => {
     if (!user) {
       alert("Vous devez être connecté pour acheter");
       return;
     }
 
+    if (!isValidCardNumber(cardNumber)) {
+      setPaymentError("Numéro de carte invalide. Entrez 16 chiffres.");
+      return;
+    }
+
+    if (!isValidExpiry(cardExpiry)) {
+      setPaymentError("Date d'expiration invalide. Format MM/AA.");
+      return;
+    }
+
+    if (!isValidCvc(cardCvc)) {
+      setPaymentError("CVC invalide. Entrez 3 ou 4 chiffres.");
+      return;
+    }
+
+    setPaymentError("");
+
     try {
       setLoading(true);
 
       // Create purchase record
-      const { error } = await supabase.from("purchases").insert([
+      const purchasesTable = supabase.from("purchases") as unknown as {
+        insert: (values: PurchaseInsert[]) => Promise<{ error: unknown }>;
+      };
+
+      const { error } = await purchasesTable.insert([
         {
           listing_id: listingId,
           buyer_id: user.id,
@@ -112,6 +157,71 @@ export function BuyModal({
                   </p>
                   <p className="text-sm text-gray-900">{sellerEmail}</p>
                 </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <p className="text-sm font-semibold text-gray-900 mb-2">
+                    Paiement par carte bancaire
+                  </p>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">
+                        Numéro de carte
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={19}
+                        value={cardNumber}
+                        onChange={(e) =>
+                          setCardNumber(e.target.value.replace(/[^0-9 ]/g, ""))
+                        }
+                        placeholder="1234 5678 9012 3456"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-1">
+                          Date d'expiration
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={5}
+                          value={cardExpiry}
+                          onChange={(e) =>
+                            setCardExpiry(
+                              e.target.value.replace(/[^0-9/]/g, ""),
+                            )
+                          }
+                          placeholder="MM/AA"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-1">
+                          CVC
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={4}
+                          value={cardCvc}
+                          onChange={(e) =>
+                            setCardCvc(e.target.value.replace(/[^0-9]/g, ""))
+                          }
+                          placeholder="123"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                    {paymentError && (
+                      <p className="text-sm text-red-600">{paymentError}</p>
+                    )}
+                    <p className="text-xs text-gray-500">
+                      Le paiement s'effectue uniquement par carte bancaire.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <div className="flex gap-3">
@@ -159,9 +269,12 @@ export function BuyModal({
                   <strong>{formatPrice(listingPrice)}</strong>.
                 </p>
                 <p>Un email de confirmation a été envoyé à {user?.email}.</p>
-                <p className="bg-yellow-50 border border-yellow-200 rounded p-3 mt-4">
+                <p className="bg-green-50 border border-green-200 rounded p-3 mt-4">
+                  <strong>Paiement:</strong> Carte bancaire accepté.
+                </p>
+                <p className="bg-yellow-50 border border-yellow-200 rounded p-3">
                   <strong>Prochaine étape:</strong> Contactez le vendeur pour
-                  convenir des modalités de livraison et de paiement.
+                  convenir des modalités de livraison.
                 </p>
               </div>
 
