@@ -30,7 +30,7 @@ export function ListingCard({ listing, onClick }: ListingCardProps) {
       onClick={onClick}
       className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow cursor-pointer group"
     >
-      <div className="aspect-video bg-gray-200 overflow-hidden border border-gray-300 rounded-lg">
+      <div className="aspect-video bg-white overflow-hidden border border-gray-300 rounded-lg">
         {listing.image_url ? (
           <img
             src={listing.image_url}

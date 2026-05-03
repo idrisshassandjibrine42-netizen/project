@@ -142,7 +142,7 @@ export function ListingDetails({
           <X className="w-5 h-5" />
         </button>
 
-        <div className="aspect-video bg-gray-200 rounded-t-lg overflow-hidden max-h-96 flex-shrink-0 border border-gray-300">
+        <div className="aspect-video bg-white rounded-t-lg overflow-hidden max-h-96 flex-shrink-0 border border-gray-300">
           {listing.image_url ? (
             <img
               src={listing.image_url}

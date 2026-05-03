@@ -1,5 +1,5 @@
 import { Search, X } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Database } from "../lib/database.types";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
@@ -18,11 +18,34 @@ export function MessagesPanel() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [error, setError] = useState("");
+  const [currentUserName, setCurrentUserName] = useState("");
 
   useEffect(() => {
     if (!user) return;
+    fetchCurrentUserProfile();
     fetchMessages();
   }, [user]);
+
+  const fetchCurrentUserProfile = async () => {
+    if (!user) return;
+
+    try {
+      const { data: profile, error: profileError } = await supabase
+        .from("user_profiles")
+        .select("full_name,email")
+        .eq("id", user.id)
+        .single();
+
+      if (profileError) throw profileError;
+
+      setCurrentUserName(
+        profile?.full_name || profile?.email || user.email || "Utilisateur",
+      );
+    } catch (err) {
+      console.error("Error fetching current user profile:", err);
+      setCurrentUserName(user.email || "Utilisateur");
+    }
+  };
 
   const fetchMessages = async () => {
     if (!user) return;
@@ -138,15 +161,25 @@ export function MessagesPanel() {
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <div className="flex items-center space-x-2 mb-4">
-          <Search className="w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Rechercher des messages..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Mes messages
+            </h2>
+            <p className="text-sm text-gray-500">
+              Connecté en tant que {currentUserName || user.email}
+            </p>
+          </div>
+          <div className="flex items-center space-x-2 w-full sm:w-auto">
+            <Search className="w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Rechercher des messages..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
         </div>
 
         {error && (

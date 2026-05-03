@@ -17,6 +17,12 @@ export function Header({
   onMessagesClick,
 }: HeaderProps) {
   const { user, signOut } = useAuth();
+  const userName =
+    user?.user_metadata?.full_name ||
+    user?.email?.split("@")[0] ||
+    user?.email ||
+    "Utilisateur";
+
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -73,9 +79,17 @@ export function Header({
                 </button>
 
                 {menuOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2">
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2">
                     {user ? (
                       <>
+                        <div className="px-4 py-3 border-b border-gray-200">
+                          <p className="text-sm font-semibold text-gray-900">
+                            Connecté en tant que
+                          </p>
+                          <p className="text-sm text-gray-500 truncate">
+                            {userName}
+                          </p>
+                        </div>
                         <button
                           onClick={() => {
                             onMyListingsClick();

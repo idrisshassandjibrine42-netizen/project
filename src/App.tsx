@@ -61,6 +61,16 @@ function App() {
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {user && (
+          <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <p className="text-sm font-medium text-gray-600">Profil connecté</p>
+            <h2 className="text-xl font-semibold text-gray-900">
+              {user.email?.split("@")[0] || user.email}
+            </h2>
+            <p className="text-sm text-gray-500">{user.email}</p>
+          </div>
+        )}
+
         {currentView === "home" ? (
           <>
             <div className="mb-8">
