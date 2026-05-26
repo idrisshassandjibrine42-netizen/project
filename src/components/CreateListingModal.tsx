@@ -38,6 +38,8 @@ export function CreateListingModal({
   });
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [imageUrlError, setImageUrlError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -110,32 +112,54 @@ export function CreateListingModal({
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (files) {
-      const newFiles: File[] = [];
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        // Validate file type
-        if (!file.type.startsWith("image/")) {
-          alert(`${file.name}: Veuillez sélectionner un fichier image`);
-          continue;
-        }
+    if (!files) return;
 
-        // Validate file size (max 5MB)
-        if (file.size > 5 * 1024 * 1024) {
-          alert(`${file.name}: L'image doit faire moins de 5MB`);
-          continue;
-        }
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    const newFiles: File[] = [];
+    const errors: string[] = [];
 
-        newFiles.push(file);
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const fileType = file.type || `image/${file.name.split(".").pop()}`;
+
+      if (!allowedTypes.includes(fileType) && !fileType.startsWith("image/")) {
+        errors.push(
+          `${file.name}: type non pris en charge. Utilisez JPG, PNG, WebP ou GIF.`,
+        );
+        continue;
       }
-      const totalImages =
-        imageFiles.length + imageUrls.length + newFiles.length;
-      if (totalImages > 6) {
-        alert("Vous pouvez ajouter entre 3 et 6 images au maximum");
-        return;
+
+      if (file.size > 5 * 1024 * 1024) {
+        errors.push(`${file.name}: taille trop grande (max 5MB).`);
+        continue;
       }
-      setImageFiles([...imageFiles, ...newFiles]);
+
+      newFiles.push(file);
     }
+
+    const currentTotal = imageFiles.length + imageUrls.length;
+    const remainingSlots = 6 - currentTotal;
+    if (remainingSlots <= 0) {
+      setImageError("Vous pouvez ajouter jusqu'à 6 images au maximum.");
+      e.target.value = "";
+      return;
+    }
+
+    if (newFiles.length > remainingSlots) {
+      errors.push(
+        `Vous pouvez ajouter seulement ${remainingSlots} image(s) supplémentaire(s).`,
+      );
+      newFiles.splice(remainingSlots);
+    }
+
+    if (newFiles.length > 0) {
+      setImageFiles((prev) => [...prev, ...newFiles]);
+      setImageError(errors.length > 0 ? errors.join(" ") : null);
+    } else {
+      setImageError(errors.length > 0 ? errors.join(" ") : null);
+    }
+
+    e.target.value = "";
   };
 
   const removeImageFile = (index: number) => {
@@ -163,10 +187,10 @@ export function CreateListingModal({
 
       if (imageFiles.length > 0) {
         setUploading(true);
-        for (const file of imageFiles) {
-          const url = await uploadImageToStorage(file);
-          allImageUrls.push(url);
-        }
+        const uploadedUrls = await Promise.all(
+          imageFiles.map((file) => uploadImageToStorage(file)),
+        );
+        allImageUrls = [...allImageUrls, ...uploadedUrls];
         setUploading(false);
       }
 
@@ -359,6 +383,9 @@ export function CreateListingModal({
                   Images sélectionnées: {imageFiles.length + imageUrls.length} /
                   entre 3 et 6 requises
                 </div>
+                {imageError && (
+                  <p className="mt-2 text-sm text-red-600">{imageError}</p>
+                )}
               </div>
 
               {/* Affichage des fichiers en attente de téléchargement */}
@@ -436,29 +463,49 @@ export function CreateListingModal({
                   <input
                     type="url"
                     value={formData.image_url}
-                    onChange={(e) =>
-                      setFormData({ ...formData, image_url: e.target.value })
-                    }
+                    onChange={(e) => {
+                      setFormData({ ...formData, image_url: e.target.value });
+                      setImageUrlError(null);
+                    }}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="https://exemple.com/image.jpg"
                   />
                   <button
                     type="button"
                     onClick={() => {
-                      if (imageFiles.length + imageUrls.length >= 6) {
-                        alert(
-                          "Vous pouvez ajouter entre 3 et 6 images au maximum",
+                      const currentTotal = imageFiles.length + imageUrls.length;
+                      if (currentTotal >= 6) {
+                        setImageUrlError(
+                          "Vous pouvez ajouter jusqu'à 6 images au maximum.",
                         );
                         return;
                       }
 
-                      if (
-                        formData.image_url &&
-                        !imageUrls.includes(formData.image_url)
-                      ) {
-                        setImageUrls([...imageUrls, formData.image_url]);
-                        setFormData({ ...formData, image_url: "" });
+                      if (!formData.image_url) {
+                        setImageUrlError("Veuillez entrer une URL d'image.");
+                        return;
                       }
+
+                      try {
+                        const url = new URL(formData.image_url);
+                        if (!url.protocol.startsWith("http")) {
+                          throw new Error("Protocole non supporté");
+                        }
+                      } catch {
+                        setImageUrlError(
+                          "URL d'image invalide. Vérifiez le format et recommencez.",
+                        );
+                        return;
+                      }
+
+                      if (imageUrls.includes(formData.image_url)) {
+                        setImageUrlError("Cette URL est déjà ajoutée.");
+                        return;
+                      }
+
+                      setImageUrls([...imageUrls, formData.image_url]);
+                      setFormData({ ...formData, image_url: "" });
+                      setImageUrlError(null);
                     }}
                     disabled={!formData.image_url}
                     className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -466,6 +513,9 @@ export function CreateListingModal({
                     Ajouter
                   </button>
                 </div>
+                {imageUrlError && (
+                  <p className="mt-2 text-sm text-red-600">{imageUrlError}</p>
+                )}
               </div>
             </div>
           </div>
