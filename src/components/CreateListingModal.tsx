@@ -153,8 +153,9 @@ export function CreateListingModal({
     try {
       setLoading(true);
       let allImageUrls: string[] = [...imageUrls];
+      const selectedImageCount = imageUrls.length + imageFiles.length;
 
-      if (allImageUrls.length < 3 || allImageUrls.length > 6) {
+      if (selectedImageCount < 3 || selectedImageCount > 6) {
         alert("Veuillez ajouter entre 3 et 6 images à votre annonce");
         setLoading(false);
         return;
