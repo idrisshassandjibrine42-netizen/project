@@ -5,6 +5,8 @@ import {
   Trash2,
   ShoppingCart,
   MessageSquare,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Database } from "../lib/database.types";
@@ -12,6 +14,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { MessageModal } from "./MessageModal";
 import { BuyModal } from "./BuyModal";
+import { getListingImageUrls } from "../lib/listingImages";
 
 type Listing = Database["public"]["Tables"]["listings"]["Row"];
 
@@ -32,8 +35,10 @@ export function ListingDetails({
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [sellerEmail, setSellerEmail] = useState<string | null>(null);
   const [loadingSellerInfo, setLoadingSellerInfo] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   const isOwner = user?.id === listing.user_id;
+  const allImages = getListingImageUrls(listing);
 
   useEffect(() => {
     const fetchSellerEmail = async () => {
@@ -142,19 +147,81 @@ export function ListingDetails({
           <X className="w-5 h-5" />
         </button>
 
-        <div className="aspect-video bg-white rounded-t-lg overflow-hidden max-h-96 flex-shrink-0 border border-gray-300">
-          {listing.image_url ? (
-            <img
-              src={listing.image_url}
-              alt={listing.title}
-              className="w-full h-full object-contain"
-            />
+        <div className="aspect-video bg-white rounded-t-lg overflow-hidden max-h-96 flex-shrink-0 border border-gray-300 relative">
+          {allImages.length > 0 ? (
+            <div className="relative w-full h-full">
+              <img
+                src={allImages[currentImageIndex]}
+                alt={`${listing.title} - Image ${currentImageIndex + 1}`}
+                className="w-full h-full object-contain"
+              />
+
+              {/* Navigation arrows */}
+              {allImages.length > 1 && (
+                <>
+                  <button
+                    onClick={() =>
+                      setCurrentImageIndex(
+                        (prev) =>
+                          (prev - 1 + allImages.length) % allImages.length,
+                      )
+                    }
+                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-2 rounded-full transition-all"
+                    title="Image précédente"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() =>
+                      setCurrentImageIndex(
+                        (prev) => (prev + 1) % allImages.length,
+                      )
+                    }
+                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-2 rounded-full transition-all"
+                    title="Image suivante"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+
+                  {/* Image counter */}
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black bg-opacity-70 text-white px-3 py-1 rounded-full text-sm">
+                    {currentImageIndex + 1} / {allImages.length}
+                  </div>
+                </>
+              )}
+            </div>
           ) : (
             <div className="w-full h-full flex items-center justify-center text-gray-400">
               <span>Pas d'image</span>
             </div>
           )}
         </div>
+
+        {/* Image thumbnails */}
+        {allImages.length > 1 && (
+          <div className="bg-gray-50 border-b border-gray-200 px-4 py-3 overflow-x-auto">
+            <div className="flex gap-2">
+              {allImages.map((image, index) => (
+                <button
+                  key={index}
+                  onClick={() => setCurrentImageIndex(index)}
+                  className={`flex-shrink-0 w-16 h-16 rounded border-2 overflow-hidden transition-all ${
+                    index === currentImageIndex
+                      ? "border-blue-500"
+                      : "border-gray-300 hover:border-gray-400"
+                  }`}
+                  title={`Image ${index + 1}`}
+                >
+                  <img
+                    src={image}
+                    alt={`Thumbnail ${index + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="p-6">
           <div className="flex items-start justify-between mb-4">
@@ -243,6 +310,14 @@ export function ListingDetails({
                     Remettre en vente
                   </button>
                 )}
+                {listing.status === "archived" && (
+                  <button
+                    onClick={() => handleStatusChange("active")}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                  >
+                    Désarchiver
+                  </button>
+                )}
                 <button
                   onClick={handleDelete}
                   disabled={deleting}
@@ -251,12 +326,14 @@ export function ListingDetails({
                   <Trash2 className="w-4 h-4" />
                   <span>{deleting ? "Suppression..." : "Supprimer"}</span>
                 </button>
-                <button
-                  onClick={() => handleStatusChange("archived")}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                >
-                  Archiver
-                </button>
+                {listing.status !== "archived" && (
+                  <button
+                    onClick={() => handleStatusChange("archived")}
+                    className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                  >
+                    Archiver
+                  </button>
+                )}
                 <button
                   onClick={onClose}
                   className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors"

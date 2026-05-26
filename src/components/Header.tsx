@@ -8,6 +8,8 @@ interface HeaderProps {
   onMyListingsClick: () => void;
   onHomeClick: () => void;
   onMessagesClick: () => void;
+  onProfileClick: () => void;
+  currentView?: "home" | "my-listings" | "messages" | "profile";
 }
 
 export function Header({
@@ -15,6 +17,8 @@ export function Header({
   onMyListingsClick,
   onHomeClick,
   onMessagesClick,
+  onProfileClick,
+  currentView = "home",
 }: HeaderProps) {
   const { user, signOut } = useAuth();
   const userName =
@@ -56,6 +60,15 @@ export function Header({
             </button>
 
             <div className="flex items-center space-x-2 sm:space-x-4">
+              {currentView !== "home" && (
+                <button
+                  onClick={onHomeClick}
+                  className="hidden sm:inline-flex items-center space-x-2 bg-gray-100 text-gray-700 px-3 sm:px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  <span>Découvrez les annonces</span>
+                </button>
+              )}
+
               {user && (
                 <button
                   onClick={onCreateClick}
@@ -109,6 +122,16 @@ export function Header({
                         >
                           <MessageSquare className="w-4 h-4" />
                           <span>Messages</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            onProfileClick();
+                            setMenuOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center space-x-2"
+                        >
+                          <User className="w-4 h-4" />
+                          <span>Gérer mon profil</span>
                         </button>
                         <button
                           onClick={handleSignOut}

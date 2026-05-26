@@ -41,6 +41,7 @@ export interface Database {
           description: string;
           price: number | null;
           image_url: string | null;
+          image_urls: string[];
           location: string | null;
           status: "active" | "sold" | "archived";
           created_at: string;
@@ -54,6 +55,7 @@ export interface Database {
           description: string;
           price?: number | null;
           image_url?: string | null;
+          image_urls?: string[];
           location?: string | null;
           status?: "active" | "sold" | "archived";
           created_at?: string;
@@ -67,8 +69,44 @@ export interface Database {
           description?: string;
           price?: number | null;
           image_url?: string | null;
+          image_urls?: string[];
           location?: string | null;
           status?: "active" | "sold" | "archived";
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      user_profiles: {
+        Row: {
+          id: string;
+          user_id: string;
+          full_name: string | null;
+          phone: string | null;
+          location: string | null;
+          bio: string | null;
+          avatar_url: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          full_name?: string | null;
+          phone?: string | null;
+          location?: string | null;
+          bio?: string | null;
+          avatar_url?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          full_name?: string | null;
+          phone?: string | null;
+          location?: string | null;
+          bio?: string | null;
+          avatar_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };

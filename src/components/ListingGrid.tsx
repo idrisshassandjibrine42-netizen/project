@@ -1,46 +1,59 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
-import { Database } from '../lib/database.types';
-import { ListingCard } from './ListingCard';
-import { ListingDetails } from './ListingDetails';
+import { useEffect, useState, useCallback } from "react";
+import { supabase } from "../lib/supabase";
+import { Database } from "../lib/database.types";
+import { ListingCard } from "./ListingCard";
+import { ListingDetails } from "./ListingDetails";
 
-type Listing = Database['public']['Tables']['listings']['Row'];
+type Listing = Database["public"]["Tables"]["listings"]["Row"];
 
 interface ListingGridProps {
   categoryId: string | null;
   refreshTrigger?: number;
   userListingsOnly?: boolean;
+  searchTerm?: string;
+  onEditListing?: (listing: Listing) => void;
 }
 
-export function ListingGrid({ categoryId, refreshTrigger, userListingsOnly }: ListingGridProps) {
+export function ListingGrid({
+  categoryId,
+  refreshTrigger,
+  userListingsOnly,
+  searchTerm,
+  onEditListing,
+}: ListingGridProps) {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
 
-  useEffect(() => {
-    loadListings();
-  }, [categoryId, refreshTrigger, userListingsOnly]);
-
-  const loadListings = async () => {
+  const loadListings = useCallback(async () => {
     try {
       setLoading(true);
       let query = supabase
-        .from('listings')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .from("listings")
+        .select("*")
+        .order("created_at", { ascending: false });
 
       if (!userListingsOnly) {
-        query = query.eq('status', 'active');
+        query = query.eq("status", "active");
       }
 
       if (categoryId) {
-        query = query.eq('category_id', categoryId);
+        query = query.eq("category_id", categoryId);
+      }
+
+      if (searchTerm && searchTerm.trim().length > 0) {
+        const trimmed = searchTerm.trim();
+        query = query.or(
+          `title.ilike.%${trimmed}%,description.ilike.%${trimmed}%`,
+        );
       }
 
       if (userListingsOnly) {
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
         if (user) {
-          query = query.eq('user_id', user.id);
+          query = query.eq("user_id", user.id);
         }
       }
 
@@ -49,11 +62,15 @@ export function ListingGrid({ categoryId, refreshTrigger, userListingsOnly }: Li
       if (error) throw error;
       setListings(data || []);
     } catch (error) {
-      console.error('Error loading listings:', error);
+      console.error("Error loading listings:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [categoryId, userListingsOnly, searchTerm]);
+
+  useEffect(() => {
+    loadListings();
+  }, [loadListings, refreshTrigger]);
 
   if (loading) {
     return (
@@ -69,7 +86,9 @@ export function ListingGrid({ categoryId, refreshTrigger, userListingsOnly }: Li
     return (
       <div className="text-center py-12">
         <p className="text-gray-500 text-lg">
-          {userListingsOnly ? 'Vous n\'avez pas encore publié d\'annonces.' : 'Aucune annonce trouvée.'}
+          {userListingsOnly
+            ? "Vous n'avez pas encore publié d'annonces."
+            : "Aucune annonce trouvée."}
         </p>
       </div>
     );
@@ -83,6 +102,11 @@ export function ListingGrid({ categoryId, refreshTrigger, userListingsOnly }: Li
             key={listing.id}
             listing={listing}
             onClick={() => setSelectedListing(listing)}
+            onEdit={
+              userListingsOnly && onEditListing
+                ? () => onEditListing(listing)
+                : undefined
+            }
           />
         ))}
       </div>
