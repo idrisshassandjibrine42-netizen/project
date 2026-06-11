@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { Plus, User, LogOut, Menu, X, MessageSquare } from "lucide-react";
+import {
+  Plus,
+  User,
+  LogOut,
+  Menu,
+  X,
+  MessageSquare,
+  ShieldCheck,
+} from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { AuthModal } from "./AuthModal";
 
@@ -9,7 +17,9 @@ interface HeaderProps {
   onHomeClick: () => void;
   onMessagesClick: () => void;
   onProfileClick: () => void;
-  currentView?: "home" | "my-listings" | "messages" | "profile";
+  onAdminClick?: () => void;
+  isAdmin?: boolean;
+  currentView?: "home" | "my-listings" | "messages" | "profile" | "admin";
 }
 
 export function Header({
@@ -18,6 +28,8 @@ export function Header({
   onHomeClick,
   onMessagesClick,
   onProfileClick,
+  onAdminClick,
+  isAdmin,
   currentView = "home",
 }: HeaderProps) {
   const { user, signOut } = useAuth();
@@ -133,6 +145,18 @@ export function Header({
                           <User className="w-4 h-4" />
                           <span>Gérer mon profil</span>
                         </button>
+                        {isAdmin && onAdminClick && (
+                          <button
+                            onClick={() => {
+                              onAdminClick();
+                              setMenuOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center space-x-2"
+                          >
+                            <ShieldCheck className="w-4 h-4" />
+                            <span>Tableau de bord admin</span>
+                          </button>
+                        )}
                         <button
                           onClick={handleSignOut}
                           className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center space-x-2 text-red-600"

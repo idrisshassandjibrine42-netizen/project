@@ -41,22 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
     });
     if (error) throw error;
-
-    // Create user profile
-    if (data.user) {
-      const { error: profileError } = await supabase
-        .from("user_profiles")
-        .insert({
-          id: data.user.id,
-          email: email,
-          full_name: email.split("@")[0], // Use email prefix as default name
-        } as any);
-
-      if (profileError) {
-        console.error("Error creating user profile:", profileError);
-        // Don't throw error here, user is already created
-      }
-    }
+    // Profile creation is handled server-side by a DB trigger
+    // to avoid RLS issues when signing up from the client.
   };
 
   const signIn = async (email: string, password: string) => {

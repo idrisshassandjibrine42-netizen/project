@@ -31,6 +31,7 @@ export interface Database {
           icon?: string;
           created_at?: string;
         };
+        Relationships: [];
       };
       listings: {
         Row: {
@@ -75,41 +76,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
-      };
-      user_profiles: {
-        Row: {
-          id: string;
-          user_id: string;
-          full_name: string | null;
-          phone: string | null;
-          location: string | null;
-          bio: string | null;
-          avatar_url: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          full_name?: string | null;
-          phone?: string | null;
-          location?: string | null;
-          bio?: string | null;
-          avatar_url?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          user_id?: string;
-          full_name?: string | null;
-          phone?: string | null;
-          location?: string | null;
-          bio?: string | null;
-          avatar_url?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
+        Relationships: [];
       };
       messages: {
         Row: {
@@ -139,6 +106,7 @@ export interface Database {
           is_read?: boolean;
           created_at?: string;
         };
+        Relationships: [];
       };
       purchases: {
         Row: {
@@ -171,33 +139,51 @@ export interface Database {
           created_at?: string;
           completed_at?: string | null;
         };
+        Relationships: [];
       };
       user_profiles: {
         Row: {
           id: string;
+          user_id?: string;
           full_name: string | null;
-          email: string;
-          avatar_url: string | null;
+          email?: string;
+          phone?: string | null;
+          location?: string | null;
+          bio?: string | null;
+          avatar_url?: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: {
-          id: string;
+          id?: string;
+          user_id?: string;
           full_name?: string | null;
-          email: string;
+          email?: string;
+          phone?: string | null;
+          location?: string | null;
+          bio?: string | null;
           avatar_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
+          user_id?: string;
           full_name?: string | null;
           email?: string;
+          phone?: string | null;
+          location?: string | null;
+          bio?: string | null;
           avatar_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
     };
+    Views: {};
+    Functions: {};
+    Enums: {};
+    CompositeTypes: {};
   };
 }

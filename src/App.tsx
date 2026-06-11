@@ -6,10 +6,11 @@ import { ListingGrid } from "./components/ListingGrid";
 import { CreateListingModal } from "./components/CreateListingModal";
 import { MessagesPanel } from "./components/MessagesPanel";
 import { ProfileManager } from "./components/ProfileManager";
+import { AdminDashboard } from "./components/AdminDashboard";
 import { useAuth } from "./contexts/AuthContext";
 import { Database } from "./lib/database.types";
 
-type View = "home" | "my-listings" | "messages" | "profile";
+type View = "home" | "my-listings" | "messages" | "profile" | "admin";
 type Listing = Database["public"]["Tables"]["listings"]["Row"];
 
 function App() {
@@ -61,6 +62,12 @@ function App() {
     setCurrentView("profile");
     setSelectedCategory(null);
   };
+
+  const handleAdminClick = () => {
+    setCurrentView("admin");
+    setSelectedCategory(null);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -80,7 +87,13 @@ function App() {
         onHomeClick={handleHomeClick}
         onMessagesClick={handleMessagesClick}
         onProfileClick={handleProfileClick}
+        onAdminClick={handleAdminClick}
         currentView={currentView}
+        isAdmin={Boolean(
+          user &&
+          (user.email === import.meta.env.VITE_ADMIN_EMAIL ||
+            user.user_metadata?.admin === true),
+        )}
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -179,6 +192,40 @@ function App() {
             </div>
 
             <MessagesPanel />
+          </>
+        ) : currentView === "admin" ? (
+          <>
+            <div className="mb-8">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="text-3xl font-bold text-gray-900 mb-2">
+                    Tableau de bord administrateur
+                  </h2>
+                  <p className="text-gray-600">
+                    Gérez les utilisateurs et les annonces depuis un seul
+                    endroit
+                  </p>
+                </div>
+                <button
+                  onClick={handleHomeClick}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                >
+                  ← Retour à Découvrez les annonces
+                </button>
+              </div>
+            </div>
+
+            {user ? (
+              <AdminDashboard />
+            ) : (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-800">
+                <p className="font-semibold">Accès refusé</p>
+                <p>
+                  Vous devez être connecté en tant qu'administrateur pour voir
+                  ce tableau de bord.
+                </p>
+              </div>
+            )}
           </>
         ) : (
           <>
