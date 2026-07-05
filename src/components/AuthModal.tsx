@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Eye, EyeOff, X } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
 interface AuthModalProps {
@@ -18,7 +18,17 @@ export function AuthModal({
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const { signIn, signUp } = useAuth();
+
+  useEffect(() => {
+    if (isOpen) {
+      setMode(initialMode);
+      setError("");
+      setEmail("");
+      setPassword("");
+    }
+  }, [isOpen, initialMode]);
 
   if (!isOpen) return null;
 
@@ -37,7 +47,13 @@ export function AuthModal({
       setEmail("");
       setPassword("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Une erreur est survenue");
+      const message =
+        err instanceof Error ? err.message : "Une erreur est survenue";
+      setError(
+        message.includes("Failed to fetch") || message.includes("fetch")
+          ? "Le service d’authentification est actuellement indisponible. Vérifiez votre connexion Internet."
+          : message,
+      );
     } finally {
       setLoading(false);
     }
@@ -75,14 +91,32 @@ export function AuthModal({
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Mot de passe
             </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-              minLength={6}
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+                minLength={6}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-gray-700"
+                aria-label={
+                  showPassword
+                    ? "Masquer le mot de passe"
+                    : "Afficher le mot de passe"
+                }
+              >
+                {showPassword ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
+              </button>
+            </div>
           </div>
 
           {error && (

@@ -6,8 +6,31 @@ import { Save, AlertCircle } from "lucide-react";
 
 type UserProfile = Database["public"]["Tables"]["user_profiles"]["Row"];
 
+const PROFILE_STORAGE_KEY = "demo-user-profile";
+
+const readStoredProfile = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const stored = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeStoredProfile = (profile: Record<string, unknown>) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+};
+
 export function ProfileManager() {
-  const { user } = useAuth();
+  const { user, updateUserProfile } = useAuth();
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [location, setLocation] = useState("");
@@ -20,17 +43,26 @@ export function ProfileManager() {
 
   const loadProfile = useCallback(async () => {
     if (!user) return;
+
     try {
+      const storedProfile = readStoredProfile();
+      if (storedProfile) {
+        setFullName((storedProfile.full_name as string) || "");
+        setPhone((storedProfile.phone as string) || "");
+        setLocation((storedProfile.location as string) || "");
+        setBio((storedProfile.bio as string) || "");
+      }
+
       const { data, error } = await supabase
         .from("user_profiles")
         .select("*")
-        .eq("user_id", user.id)
-        .single();
+        .or(`user_id.eq.${user.id},id.eq.${user.id}`)
+        .limit(1)
+        .maybeSingle();
 
       if (error) {
-        // If table doesn't exist or other error, just use auth metadata
-        console.log(
-          "Profile load error (table might not exist):",
+        console.warn(
+          "Profile load error, using local fallback:",
           error.message,
         );
         if (user.user_metadata?.full_name) {
@@ -41,17 +73,29 @@ export function ProfileManager() {
 
       if (data) {
         const profile = data as UserProfile;
-        setFullName(profile.full_name || "");
-        setPhone(profile.phone || "");
-        setLocation(profile.location || "");
-        setBio(profile.bio || "");
+        const nextProfile = {
+          full_name: profile.full_name || "",
+          phone: profile.phone || "",
+          location: profile.location || "",
+          bio: profile.bio || "",
+        };
+        setFullName(nextProfile.full_name);
+        setPhone(nextProfile.phone);
+        setLocation(nextProfile.location);
+        setBio(nextProfile.bio);
+        writeStoredProfile(nextProfile);
       } else if (user.user_metadata?.full_name) {
         setFullName(user.user_metadata.full_name);
       }
     } catch (error) {
       console.error("Error loading profile:", error);
-      // Fallback to auth metadata
-      if (user.user_metadata?.full_name) {
+      const storedProfile = readStoredProfile();
+      if (storedProfile) {
+        setFullName((storedProfile.full_name as string) || "");
+        setPhone((storedProfile.phone as string) || "");
+        setLocation((storedProfile.location as string) || "");
+        setBio((storedProfile.bio as string) || "");
+      } else if (user.user_metadata?.full_name) {
         setFullName(user.user_metadata.full_name);
       }
     }
@@ -61,28 +105,24 @@ export function ProfileManager() {
     loadProfile();
   }, [loadProfile]);
 
-  const saveProfileToDatabase = async (profileData: any) => {
-    // Helper function to bypass TypeScript issues with user_profiles table
-    // TODO: Fix TypeScript types once Supabase types are properly generated
+  const saveProfileToDatabase = async (
+    profileData: Record<string, unknown>,
+  ) => {
+    try {
+      const { error } = await (supabase.from("user_profiles") as any).upsert(
+        profileData,
+        {
+          onConflict: "id",
+          returning: "minimal",
+        },
+      );
 
-    // First try to insert
-    const { error } = await (supabase.from("user_profiles") as any).insert(
-      profileData,
-    );
-
-    if (error) {
-      console.log("Insert failed, trying upsert:", error.message);
-      // If insert fails, try upsert (table might already exist)
-      const { error: upsertError } = await (
-        supabase.from("user_profiles") as any
-      ).upsert(profileData, {
-        onConflict: "user_id",
-        returning: "minimal",
-      });
-
-      if (upsertError) {
-        throw upsertError;
+      if (error) {
+        throw error;
       }
+    } catch (error) {
+      console.warn("Remote profile save failed, using local fallback:", error);
+      throw error;
     }
   };
 
@@ -94,18 +134,19 @@ export function ProfileManager() {
     setMessage(null);
 
     try {
-      // Update auth user metadata
       const { error: authError } = await supabase.auth.updateUser({
         data: { full_name: fullName },
       });
 
       if (authError) {
-        console.error("Auth update error:", authError);
-        // Continue anyway, this is not critical
+        console.warn(
+          "Auth update error, continuing with local fallback:",
+          authError,
+        );
       }
 
-      // Try to upsert profile data
       const profileData = {
+        id: user.id,
         user_id: user.id,
         full_name: fullName,
         phone,
@@ -114,11 +155,14 @@ export function ProfileManager() {
         updated_at: new Date().toISOString(),
       };
 
-      console.log("Attempting to save profile:", profileData);
+      try {
+        await saveProfileToDatabase(profileData);
+      } catch {
+        // keep local persistence even if the remote save is unavailable
+      }
 
-      await saveProfileToDatabase(profileData);
-
-      console.log("Profile saved successfully");
+      writeStoredProfile(profileData);
+      await updateUserProfile({ full_name: fullName, phone, location, bio });
 
       setMessage({
         type: "success",

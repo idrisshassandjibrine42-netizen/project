@@ -15,6 +15,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { MessageModal } from "./MessageModal";
 import { BuyModal } from "./BuyModal";
 import { getListingImageUrls } from "../lib/listingImages";
+import { deleteLocalListing, updateLocalListing } from "../lib/localListings";
 
 type Listing = Database["public"]["Tables"]["listings"]["Row"];
 
@@ -103,12 +104,19 @@ export function ListingDetails({
 
     try {
       setDeleting(true);
-      const { error } = await supabase
-        .from("listings")
-        .delete()
-        .eq("id", listing.id);
+      deleteLocalListing(listing.id);
 
-      if (error) throw error;
+      try {
+        const { error } = await supabase
+          .from("listings")
+          .delete()
+          .eq("id", listing.id);
+
+        if (error) throw error;
+      } catch (error) {
+        console.warn("Supabase delete failed, local deletion applied:", error);
+      }
+
       onUpdate();
       onClose();
     } catch (error) {
@@ -123,12 +131,25 @@ export function ListingDetails({
     newStatus: "active" | "sold" | "archived",
   ) => {
     try {
-      const { error } = await supabase
-        .from("listings")
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq("id", listing.id);
+      updateLocalListing(listing.id, {
+        status: newStatus,
+        updated_at: new Date().toISOString(),
+      });
 
-      if (error) throw error;
+      try {
+        const { error } = await supabase
+          .from("listings")
+          .update({ status: newStatus, updated_at: new Date().toISOString() })
+          .eq("id", listing.id);
+
+        if (error) throw error;
+      } catch (error) {
+        console.warn(
+          "Supabase status update failed, local update applied:",
+          error,
+        );
+      }
+
       onUpdate();
       onClose();
     } catch (error) {

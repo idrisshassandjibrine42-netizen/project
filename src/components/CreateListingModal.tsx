@@ -7,6 +7,7 @@ import {
   getListingImageUrls,
   serializeListingImageUrls,
 } from "../lib/listingImages";
+import { saveLocalListing } from "../lib/localListings";
 
 type Category = Database["public"]["Tables"]["categories"]["Row"];
 type Listing = Database["public"]["Tables"]["listings"]["Row"];
@@ -84,30 +85,19 @@ export function CreateListingModal({
   };
 
   const uploadImageToStorage = async (file: File): Promise<string> => {
-    try {
-      if (!user) throw new Error("User not authenticated");
-
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-      const filePath = `${user.id}/${fileName}`;
-
-      // Upload to Supabase Storage
-      const { error: uploadError, data } = await supabase.storage
-        .from("listings-images")
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from("listings-images")
-        .getPublicUrl(filePath);
-
-      return urlData.publicUrl;
-    } catch (error) {
-      console.error("Error uploading image:", error);
-      throw error;
-    }
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string" && reader.result.length > 0) {
+          resolve(reader.result);
+        } else {
+          reject(new Error("Impossible de lire l'image sélectionnée."));
+        }
+      };
+      reader.onerror = () =>
+        reject(new Error("Impossible de lire l'image sélectionnée."));
+      reader.readAsDataURL(file);
+    });
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -202,35 +192,33 @@ export function CreateListingModal({
 
       const serializedImageUrl = serializeListingImageUrls(allImageUrls);
 
+      const listingRecord = {
+        id:
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `local-${Date.now()}`,
+        user_id: user.id,
+        category_id: formData.category_id || null,
+        title: formData.title,
+        description: formData.description,
+        price: formData.price ? parseFloat(formData.price) : null,
+        image_url: serializedImageUrl,
+        image_urls: allImageUrls,
+        location: formData.location || null,
+        status: "active" as const,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      } as Listing;
+
       if (editingListing) {
-        const { error } = await supabase
-          .from("listings")
-          .update({
-            title: formData.title,
-            description: formData.description,
-            price: formData.price ? parseFloat(formData.price) : null,
-            category_id: formData.category_id || null,
-            location: formData.location || null,
-            image_url: serializedImageUrl,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", editingListing.id)
-          .eq("user_id", user.id);
-
-        if (error) throw error;
+        saveLocalListing({
+          ...editingListing,
+          ...listingRecord,
+          id: editingListing.id,
+          user_id: editingListing.user_id,
+        } as Listing);
       } else {
-        const { error } = await supabase.from("listings").insert({
-          user_id: user.id,
-          title: formData.title,
-          description: formData.description,
-          price: formData.price ? parseFloat(formData.price) : null,
-          category_id: formData.category_id || null,
-          location: formData.location || null,
-          image_url: serializedImageUrl,
-          status: "active",
-        });
-
-        if (error) throw error;
+        saveLocalListing(listingRecord);
       }
 
       setFormData({

@@ -1,6 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { Database } from "../lib/database.types";
+import {
+  clearDemoUserLocalListings,
+  readLocalListings,
+} from "../lib/localListings";
 import { ListingCard } from "./ListingCard";
 import { ListingDetails } from "./ListingDetails";
 
@@ -28,6 +32,12 @@ export function ListingGrid({
   const loadListings = useCallback(async () => {
     try {
       setLoading(true);
+      const localListings = clearDemoUserLocalListings();
+      const fallbackTimer = window.setTimeout(() => {
+        setListings(localListings);
+        setLoading(false);
+      }, 50);
+
       let query = supabase
         .from("listings")
         .select("*")
@@ -60,9 +70,54 @@ export function ListingGrid({
       const { data, error } = await query;
 
       if (error) throw error;
-      setListings(data || []);
+      const remoteListings = ((data || []) as Listing[]).filter((listing) => {
+        const normalized = (listing.user_id || "").trim().toLowerCase();
+        return !["#demo-user", "#demo-use", "demo-user", "demo-use"].includes(
+          normalized,
+        );
+      });
+      const filteredLocalListings = localListings.filter((listing) => {
+        const normalized = (listing.user_id || "").trim().toLowerCase();
+        if (
+          ["#demo-user", "#demo-use", "demo-user", "demo-use"].includes(
+            normalized,
+          )
+        ) {
+          return false;
+        }
+        if (userListingsOnly) {
+          return true;
+        }
+        if (listing.status !== "active") {
+          return false;
+        }
+        if (!categoryId) {
+          return true;
+        }
+        return listing.category_id === categoryId;
+      });
+      const combinedListings = [...remoteListings, ...filteredLocalListings];
+      const uniqueListings = combinedListings.filter(
+        (listing, index, self) =>
+          index === self.findIndex((item) => item.id === listing.id),
+      );
+      setListings(uniqueListings);
     } catch (error) {
       console.error("Error loading listings:", error);
+      const localListings = clearDemoUserLocalListings();
+      const filteredLocalListings = localListings.filter((listing) => {
+        if (userListingsOnly) {
+          return true;
+        }
+        if (listing.status !== "active") {
+          return false;
+        }
+        if (!categoryId) {
+          return true;
+        }
+        return listing.category_id === categoryId;
+      });
+      setListings(filteredLocalListings);
     } finally {
       setLoading(false);
     }

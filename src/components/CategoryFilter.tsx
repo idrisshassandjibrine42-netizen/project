@@ -1,49 +1,72 @@
-import { useEffect, useState } from 'react';
-import * as Icons from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { Database } from '../lib/database.types';
+import { useEffect, useState } from "react";
+import * as Icons from "lucide-react";
+import { supabase } from "../lib/supabase";
+import { Database } from "../lib/database.types";
+import { mockCategories } from "../lib/mockData";
 
-type Category = Database['public']['Tables']['categories']['Row'];
+type Category = Database["public"]["Tables"]["categories"]["Row"];
 
 interface CategoryFilterProps {
   selectedCategory: string | null;
   onSelectCategory: (categoryId: string | null) => void;
 }
 
-export function CategoryFilter({ selectedCategory, onSelectCategory }: CategoryFilterProps) {
+export function CategoryFilter({
+  selectedCategory,
+  onSelectCategory,
+}: CategoryFilterProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setCategories(mockCategories);
+      setLoading(false);
+    }, 50);
+
     loadCategories();
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   const loadCategories = async () => {
     try {
       const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('name');
+        .from("categories")
+        .select("*")
+        .order("name");
 
       if (error) throw error;
-      setCategories(data || []);
+      if (data && data.length > 0) {
+        setCategories(data);
+      }
     } catch (error) {
-      console.error('Error loading categories:', error);
+      console.error("Error loading categories:", error);
+      setCategories(mockCategories);
     } finally {
       setLoading(false);
     }
   };
 
   const getIcon = (iconName: string) => {
-    const IconComponent = Icons[iconName as keyof typeof Icons] as React.ComponentType<{ className?: string }>;
-    return IconComponent ? <IconComponent className="w-5 h-5" /> : <Icons.Tag className="w-5 h-5" />;
+    const IconComponent = Icons[
+      iconName as keyof typeof Icons
+    ] as React.ComponentType<{ className?: string }>;
+    return IconComponent ? (
+      <IconComponent className="w-5 h-5" />
+    ) : (
+      <Icons.Tag className="w-5 h-5" />
+    );
   };
 
   if (loading) {
     return (
       <div className="flex space-x-2 overflow-x-auto pb-2">
         {[...Array(6)].map((_, i) => (
-          <div key={i} className="h-10 w-32 bg-gray-200 rounded-lg animate-pulse" />
+          <div
+            key={i}
+            className="h-10 w-32 bg-gray-200 rounded-lg animate-pulse"
+          />
         ))}
       </div>
     );
@@ -55,8 +78,8 @@ export function CategoryFilter({ selectedCategory, onSelectCategory }: CategoryF
         onClick={() => onSelectCategory(null)}
         className={`flex items-center space-x-2 px-4 py-2 rounded-lg whitespace-nowrap transition-colors ${
           selectedCategory === null
-            ? 'bg-blue-600 text-white'
-            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            ? "bg-blue-600 text-white"
+            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
         }`}
       >
         <Icons.Grid className="w-5 h-5" />
@@ -68,8 +91,8 @@ export function CategoryFilter({ selectedCategory, onSelectCategory }: CategoryF
           onClick={() => onSelectCategory(category.id)}
           className={`flex items-center space-x-2 px-4 py-2 rounded-lg whitespace-nowrap transition-colors ${
             selectedCategory === category.id
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              ? "bg-blue-600 text-white"
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
           }`}
         >
           {getIcon(category.icon)}

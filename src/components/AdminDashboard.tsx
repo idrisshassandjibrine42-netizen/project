@@ -2,16 +2,112 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { Database } from "../lib/database.types";
 import {
+  deleteLocalListing,
+  readLocalListings,
+  updateLocalListing,
+} from "../lib/localListings";
+import {
   RefreshCw,
   ShieldCheck,
   Users,
   ListChecks,
   Archive,
   Trash2,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 type UserProfile = Database["public"]["Tables"]["user_profiles"]["Row"];
 type Listing = Database["public"]["Tables"]["listings"]["Row"];
+
+const LOCAL_USERS_KEY = "demo-admin-users";
+
+const readLocalUsers = (): UserProfile[] => {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const stored = window.localStorage.getItem(LOCAL_USERS_KEY);
+    return stored ? (JSON.parse(stored) as UserProfile[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeLocalUsers = (users: UserProfile[]) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users));
+};
+
+const saveLocalUser = (user: UserProfile) => {
+  const current = readLocalUsers();
+  const existingIndex = current.findIndex((item) => item.id === user.id);
+  const nextUsers =
+    existingIndex >= 0
+      ? current.map((item) => (item.id === user.id ? user : item))
+      : [user, ...current];
+  writeLocalUsers(nextUsers);
+  return nextUsers;
+};
+
+const deleteLocalUser = (userId: string) => {
+  const current = readLocalUsers();
+  const nextUsers = current.filter((item) => item.id !== userId);
+  writeLocalUsers(nextUsers);
+  return nextUsers;
+};
+
+const persistAdminAuthUser = (
+  userId: string,
+  email: string,
+  password: string,
+) => {
+  if (typeof window === "undefined") return;
+
+  try {
+    const stored = window.localStorage.getItem("demo-auth-users");
+    const existingUsers = stored ? JSON.parse(stored) : [];
+    const normalizedEmail = email.trim().toLowerCase();
+    const nextUsers = existingUsers.some(
+      (item: { email?: string }) =>
+        (item.email || "").trim().toLowerCase() === normalizedEmail,
+    )
+      ? existingUsers.map(
+          (item: {
+            email?: string;
+            id?: string;
+            password?: string;
+            user_metadata?: Record<string, unknown>;
+          }) =>
+            (item.email || "").trim().toLowerCase() === normalizedEmail
+              ? {
+                  ...item,
+                  id: userId,
+                  email: normalizedEmail,
+                  password,
+                  user_metadata: {
+                    ...(item.user_metadata || {}),
+                    full_name: normalizedEmail.split("@")[0],
+                  },
+                }
+              : item,
+        )
+      : [
+          ...existingUsers,
+          {
+            id: userId,
+            email: normalizedEmail,
+            password,
+            user_metadata: {
+              full_name: normalizedEmail.split("@")[0],
+            },
+          },
+        ];
+
+    window.localStorage.setItem("demo-auth-users", JSON.stringify(nextUsers));
+  } catch {
+    // ignore local persistence issues
+  }
+};
 
 const formatDate = (value: string) =>
   new Date(value).toLocaleDateString("fr-FR", {
@@ -45,6 +141,7 @@ export function AdminDashboard() {
   );
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const loadData = async () => {
@@ -52,6 +149,9 @@ export function AdminDashboard() {
     setError(null);
 
     try {
+      const localUsers = readLocalUsers();
+      const localListings = readLocalListings();
+
       const [usersResponse, listingsResponse] = await Promise.all([
         supabase
           .from("user_profiles")
@@ -63,19 +163,31 @@ export function AdminDashboard() {
           .order("created_at", { ascending: false }),
       ]);
 
-      if (usersResponse.error) {
-        throw usersResponse.error;
-      }
-      if (listingsResponse.error) {
-        throw listingsResponse.error;
+      if (usersResponse.error && listingsResponse.error) {
+        throw new Error("Supabase unavailable");
       }
 
-      setUsers(usersResponse.data || []);
-      setListings(listingsResponse.data || []);
+      const remoteUsers = (usersResponse.data || []) as UserProfile[];
+      const remoteListings = (listingsResponse.data || []) as Listing[];
+
+      const mergedUsers = remoteUsers.length > 0 ? remoteUsers : localUsers;
+      const mergedListings =
+        remoteListings.length > 0 ? remoteListings : localListings;
+
+      if (mergedUsers.length > 0) {
+        writeLocalUsers(mergedUsers);
+      }
+
+      setUsers(mergedUsers);
+      setListings(mergedListings);
     } catch (err) {
       console.error("AdminDashboard error", err);
+      const localUsers = readLocalUsers();
+      const localListings = readLocalListings();
+      setUsers(localUsers.length > 0 ? localUsers : []);
+      setListings(localListings.length > 0 ? localListings : []);
       setError(
-        "Impossible de charger les données. Vérifiez les autorisations Supabase.",
+        "Chargement en mode local. Les actions de base restent disponibles.",
       );
     } finally {
       setLoading(false);
@@ -87,25 +199,33 @@ export function AdminDashboard() {
   }, [refreshTrigger]);
 
   const filteredUsers = useMemo(() => {
-    if (!search.trim()) return users;
-    const query = search.toLowerCase();
-    return users.filter(
-      (user) =>
-        (user.email?.toLowerCase().includes(query) ?? false) ||
-        (user.full_name?.toLowerCase().includes(query) ?? false),
-    );
+    const query = search.trim().toLowerCase();
+    if (!query) return users;
+    return users.filter((user) => {
+      const email = (user.email || "").toLowerCase();
+      const fullName = (user.full_name || "").toLowerCase();
+      const id = (user.id || "").toLowerCase();
+      return (
+        email.includes(query) || fullName.includes(query) || id.includes(query)
+      );
+    });
   }, [search, users]);
 
   const filteredListings = useMemo(() => {
-    if (!search.trim()) return listings;
-    const query = search.toLowerCase();
-    return listings.filter(
-      (listing) =>
-        listing.title.toLowerCase().includes(query) ||
-        listing.description.toLowerCase().includes(query) ||
-        listing.location?.toLowerCase().includes(query) ||
-        listing.user_id.toLowerCase().includes(query),
-    );
+    const query = search.trim().toLowerCase();
+    if (!query) return listings;
+    return listings.filter((listing) => {
+      const title = (listing.title || "").toLowerCase();
+      const description = (listing.description || "").toLowerCase();
+      const location = (listing.location || "").toLowerCase();
+      const owner = (listing.user_id || "").toLowerCase();
+      return (
+        title.includes(query) ||
+        description.includes(query) ||
+        location.includes(query) ||
+        owner.includes(query)
+      );
+    });
   }, [search, listings]);
 
   const refresh = () => setRefreshTrigger((prev) => prev + 1);
@@ -115,16 +235,21 @@ export function AdminDashboard() {
     status: Listing["status"],
   ) => {
     setError(null);
-    const { error: updateError } = await supabase
-      .from("listings")
-      .update({ status })
-      .eq("id", listingId);
+    updateLocalListing(listingId, { status });
 
-    if (updateError) {
+    try {
+      const { error: updateError } = await supabase
+        .from("listings")
+        .update({ status })
+        .eq("id", listingId);
+
+      if (updateError) {
+        throw updateError;
+      }
+    } catch {
       setError(
-        "Action non autorisée ou impossible. Vérifiez les permissions Supabase.",
+        "Statut mis à jour localement. La base Supabase n’a pas répondu.",
       );
-      return;
     }
 
     refresh();
@@ -132,13 +257,20 @@ export function AdminDashboard() {
 
   const deleteListing = async (listingId: string) => {
     setError(null);
-    const { error: deleteError } = await supabase
-      .from("listings")
-      .delete()
-      .eq("id", listingId);
-    if (deleteError) {
-      setError("Suppression impossible. Vérifiez les permissions Supabase.");
-      return;
+    deleteLocalListing(listingId);
+
+    try {
+      const { error: deleteError } = await supabase
+        .from("listings")
+        .delete()
+        .eq("id", listingId);
+      if (deleteError) {
+        throw deleteError;
+      }
+    } catch {
+      setError(
+        "Annonce supprimée localement. La base Supabase n’a pas répondu.",
+      );
     }
     refresh();
   };
@@ -149,49 +281,67 @@ export function AdminDashboard() {
     setCreatingUser(true);
 
     try {
-      const currentSessionResponse = await supabase.auth.getSession();
-      const currentSession = currentSessionResponse.data.session;
+      const normalizedEmail = newUserEmail.trim().toLowerCase();
+      const localUsers = readLocalUsers();
+      const alreadyExists = localUsers.some(
+        (user) => (user.email || "").trim().toLowerCase() === normalizedEmail,
+      );
 
-      const { data: signUpData, error: signUpError } =
-        await supabase.auth.signUp({
-          email: newUserEmail,
-          password: newUserPassword,
-        });
-
-      if (signUpError) {
-        throw signUpError;
+      if (alreadyExists) {
+        throw new Error("Un compte avec cette adresse existe déjà.");
       }
 
-      const createdUser = signUpData?.user;
-      if (currentSession?.access_token && currentSession?.refresh_token) {
-        const { error: restoreError } = await supabase.auth.setSession({
-          access_token: currentSession.access_token,
-          refresh_token: currentSession.refresh_token,
-        });
+      const createdUserId =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `local-${Date.now()}`;
 
-        if (restoreError) {
-          console.warn(
-            "Impossible de restaurer la session admin",
-            restoreError,
-          );
+      const localProfile: UserProfile = {
+        id: createdUserId,
+        email: normalizedEmail,
+        full_name: normalizedEmail.split("@")[0],
+        created_at: new Date().toISOString(),
+      } as UserProfile;
+
+      saveLocalUser(localProfile);
+      persistAdminAuthUser(localProfile.id, normalizedEmail, newUserPassword);
+
+      try {
+        const currentSessionResponse = await supabase.auth.getSession();
+        const currentSession = currentSessionResponse.data.session;
+
+        const { data: signUpData, error: signUpError } =
+          await supabase.auth.signUp({
+            email: normalizedEmail,
+            password: newUserPassword,
+          });
+
+        if (!signUpError && signUpData?.user?.id) {
+          const remoteProfile = {
+            ...localProfile,
+            id: signUpData.user.id,
+          } as UserProfile;
+          saveLocalUser(remoteProfile);
         }
-      }
 
-      if (createdUser?.id) {
-        const profileInsert: Database["public"]["Tables"]["user_profiles"]["Insert"] =
-          {
-            id: createdUser.id,
-            email: newUserEmail,
-            full_name: newUserEmail.split("@")[0],
-          };
+        if (currentSession?.access_token && currentSession?.refresh_token) {
+          const { error: restoreError } = await supabase.auth.setSession({
+            access_token: currentSession.access_token,
+            refresh_token: currentSession.refresh_token,
+          });
 
-        const { error: profileError } = await supabase
-          .from("user_profiles")
-          .insert(profileInsert);
-
-        if (profileError) {
-          throw profileError;
+          if (restoreError) {
+            console.warn(
+              "Impossible de restaurer la session admin",
+              restoreError,
+            );
+          }
         }
+      } catch (supabaseError) {
+        console.warn(
+          "Supabase signup unavailable, used local fallback:",
+          supabaseError,
+        );
       }
 
       setNewUserEmail("");
@@ -244,7 +394,9 @@ export function AdminDashboard() {
         .delete()
         .eq("id", userId);
       if (profileError) {
-        throw profileError;
+        deleteLocalUser(userId);
+      } else {
+        deleteLocalUser(userId);
       }
 
       setUserActionMessage("Utilisateur et données associées supprimés.");
@@ -391,13 +543,31 @@ export function AdminDashboard() {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Mot de passe
             </label>
-            <input
-              type="password"
-              value={newUserPassword}
-              onChange={(event) => setNewUserPassword(event.target.value)}
-              placeholder="Au moins 6 caractères"
-              className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={newUserPassword}
+                onChange={(event) => setNewUserPassword(event.target.value)}
+                placeholder="Au moins 6 caractères"
+                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 pr-12 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-gray-700"
+                aria-label={
+                  showPassword
+                    ? "Masquer le mot de passe"
+                    : "Afficher le mot de passe"
+                }
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
